@@ -79,11 +79,27 @@ jobs:
                   "yt-dlp",
                   "--no-warnings",
                   "--ignore-errors",
-                  "-o", "downloads/%(id)s_%(title).30s.%(ext)s",
+                  "-o", "downloads/%(id)s.%(ext)s",
                   url
               ]
               subprocess.run(cmd)
               time.sleep(0.3)
+
+          # ایمن‌سازی نام فایل‌ها برای جلوگیری از ارور کروشه [] در گیت‌هاب
+          print("\n🧹 در حال ایمن‌سازی نام فایل‌ها برای آپلود...")
+          for filename in os.listdir("downloads"):
+              filepath = os.path.join("downloads", filename)
+              if os.path.isfile(filepath):
+                  name, ext = os.path.splitext(filename)
+                  clean_name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+                  clean_name = re.sub(r"_+", "_", clean_name).strip("_")
+                  if not clean_name:
+                      clean_name = "file"
+                  new_filename = f"{clean_name}{ext}"
+                  new_filepath = os.path.join("downloads", new_filename)
+                  if filepath != new_filepath:
+                      os.rename(filepath, new_filepath)
+                      print(f"تغییر نام ایمن: {filename} -> {new_filename}")
           '
 
       - name: Check Downloaded Files
