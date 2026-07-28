@@ -1,0 +1,115 @@
+name: Advanced Telegram Batch Downloader
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 'لینک‌ها یا رنج‌های تلگرام (هر خط یک لینک). مثال: https://t.me/yf83oj/4-200'
+        required: true
+        type: string
+      release_tag:
+        description: 'نام تگ ریلیز'
+        required: true
+        type: string
+        default: 'batch-media-release'
+
+jobs:
+  batch-download-and-release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install yt-dlp
+
+      - name: Create Downloads Folder
+        run: mkdir -p downloads
+
+      - name: Parse Links and Download Media
+        env:
+          URLS_INPUT: ${{ github.event.inputs.urls }}
+        run: |
+          python -c '
+          import os, re, subprocess, time
+
+          raw_input = os.environ.get("URLS_INPUT", "")
+          lines = [line.strip() for line in raw_input.splitlines() if line.strip()]
+
+          urls_to_download = []
+
+          for line in lines:
+              # الگوی شناسایی رنج پست‌ها مثل https://t.me/yf83oj/4-200 یا https://t.me/s/yf83oj/4-200
+              range_match = re.search(r"https://t\.me/(?:s/)?([a-zA-Z0-9_]+)/(\d+)-(\d+)", line)
+              single_match = re.search(r"https://t\.me/(?:s/)?([a-zA-Z0-9_]+)/(\d+)", line)
+
+              if range_match:
+                  channel = range_match.group(1)
+                  start_id = int(range_match.group(2))
+                  end_id = int(range_match.group(3))
+                  
+                  if start_id > end_id:
+                      start_id, end_id = end_id, start_id
+                  
+                  print(f"📌 تشخیص رنج برای کانال @{channel}: از پست {start_id} تا {end_id}")
+                  for post_id in range(start_id, end_id + 1):
+                      urls_to_download.append(f"https://t.me/s/{channel}/{post_id}")
+                      
+              elif single_match:
+                  channel = single_match.group(1)
+                  post_id = single_match.group(2)
+                  urls_to_download.append(f"https://t.me/s/{channel}/{post_id}")
+              else:
+                  urls_to_download.append(line)
+
+          print(f"\n🚀 تعداد کل پست‌های استخراج شده برای بررسی: {len(urls_to_download)}\n")
+
+          for idx, url in enumerate(urls_to_download, 1):
+              print(f"[{idx}/{len(urls_to_download)}] در حال بررسی: {url}")
+              
+              # دانلود فایل با yt-dlp و فرمت نام‌گذاری بر اساس ID پست
+              cmd = [
+                  "yt-dlp",
+                  "--no-warnings",
+                  "--ignore-errors",
+                  "-o", "downloads/%(id)s_%(title).30s.%(ext)s",
+                  url
+              ]
+              subprocess.run(cmd)
+              time.sleep(0.3) # وقفه کوتاهی برای جلوگیری از مسدود شدن توسط تلگرام
+          '
+
+      - name: Check Downloaded Files
+        id: check_files
+        run: |
+          count=$(ls -1 downloads | wc -l)
+          echo "تعداد فایل‌های دریافت شده: $count"
+          echo "count=$count" >> $GITHUB_OUTPUT
+
+      - name: Upload All Media to GitHub Release
+        if: steps.check_files.outputs.count > 0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.release_tag }}"
+          
+          # ساخت ریلیز در صورت عدم وجود
+          gh release create "$TAG" --title "Telegram Batch Release ($TAG)" --notes "آرشیو دانلود شده از تلگرام" --clobber || true
+
+          # آپلود تمام فایل‌های دانلود شده
+          echo "در حال آپلود فایل‌ها به بخش Release..."
+          gh release upload "$TAG" downloads/* --clobber
+          echo "✅ آپلود با موفقیت تمام شد!"
