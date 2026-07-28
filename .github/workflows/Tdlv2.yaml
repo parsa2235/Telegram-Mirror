@@ -63,18 +63,18 @@ jobs:
                       start_id, end_id = end_id, start_id
                   print(f"📌 تشخیص رنج برای کانال @{channel}: از پست {start_id} تا {end_id}")
                   for post_id in range(start_id, end_id + 1):
-                      urls_to_download.append(f"https://t.me/s/{channel}/{post_id}")
+                      urls_to_download.append(f"https://t.me/{channel}/{post_id}")
               elif single_match:
                   channel = single_match.group(1)
                   post_id = single_match.group(2)
-                  urls_to_download.append(f"https://t.me/s/{channel}/{post_id}")
+                  urls_to_download.append(f"https://t.me/{channel}/{post_id}")
               else:
                   urls_to_download.append(line)
 
           print(f"\n🚀 تعداد کل پست‌های استخراج شده: {len(urls_to_download)}\n")
 
           for idx, url in enumerate(urls_to_download, 1):
-              print(f"[{idx}/{len(urls_to_download)}] در حال بررسی: {url}")
+              print(f"[{idx}/{len(urls_to_download)}] در حال بررسی و دانلود: {url}")
               cmd = [
                   "yt-dlp",
                   "--no-warnings",
@@ -89,8 +89,8 @@ jobs:
       - name: Check Downloaded Files
         id: check_files
         run: |
-          count=$(ls -1 downloads | wc -l)
-          echo "تعداد فایل‌های دریافت شده: $count"
+          count=$(find downloads -type f | wc -l)
+          echo "تعداد فایل‌های واقعی دانلود شده: $count"
           echo "count=$count" >> $GITHUB_OUTPUT
 
       - name: Upload All Media to GitHub Release
